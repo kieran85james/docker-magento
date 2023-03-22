@@ -1,0 +1,129 @@
+version: "3"
+services:
+  # Apache container: https://hub.docker.com/r/webdevops/apache
+  apache:
+    image: webdevops/apache:latest
+    container_name: apache
+    restart: always
+    working_dir: /app
+    environment:
+      - WEB_ALIAS_DOMAIN=magento.local
+      - WEB_DOCUMENT_ROOT=/app/pub
+      - WEB_PHP_SOCKET=php:9000
+    volumes:
+      - ./:/app:cached
+    ports:
+      - "80:80"
+      - "443:443"
+      - "32823:22"
+    networks:
+      - web
+  # PHP container: https://hub.docker.com/r/webdevops/php-dev
+  php:
+    image: webdevops/php-dev:8.1
+    container_name: php
+    restart: always
+    working_dir: /app
+    environment:
+      - PHP_DISPLAY_ERRORS=1
+      - PHP_MEMORY_LIMIT=2048M
+      - PHP_POST_MAX_SIZE=500M
+      - PHP_UPLOAD_MAX_FILESIZE=2G
+      - php.max_input_vars=10000
+      - XDEBUG_MODE=debug
+      - XDEBUG_START_WITH_REQUEST=yes
+      - php.xdebug.log_level=0
+    volumes:
+      - ./:/app:cached
+      - ~/.bash_history:/home/application/.bash_history:cached
+    networks:
+      - web
+      - database
+  # MariaDB container: https://hub.docker.com/_/mariadb
+  mysql:
+    image: mariadb:10.4
+    container_name: mysql
+    restart: always
+    ports:
+      - "3306:3306"
+    environment:
+      - MARIADB_ROOT_PASSWORD=root
+      - MARIADB_DATABASE=magento
+    volumes:
+      - db-data:/var/lib/mysql
+    networks:
+      - database
+  # OpenSearch container: https://hub.docker.com/r/opensearchproject/opensearch
+  opensearch:
+    image: opensearchproject/opensearch:latest
+    container_name: opensearch
+    restart: always
+    environment:
+      - cluster.name=opensearch-cluster
+      - node.name=opensearch
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
+      - "DISABLE_INSTALL_DEMO_CONFIG=true"
+      - "DISABLE_SECURITY_PLUGIN=true"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    ports:
+      - 9200:9200
+      - 9600:9600
+    networks:
+      - database
+  # PHPMyAdmin container: https://hub.docker.com/r/phpmyadmin/phpmyadmin
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin:latest
+    container_name: phpmyadmin
+    restart: always
+    environment:
+      - PMA_HOST=mysql
+      - MYSQL_ROOT_PASSWORD=root
+      - PMA_USER=root
+      - PMA_PASSWORD=root
+    ports:
+      - "8080:80"
+    networks:
+      - database
+    depends_on:
+      - mysql
+  # MailHog container: https://hub.docker.com/r/mailhog/mailhog
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: mailhog
+    restart: always
+    ports:
+      - "1025"
+      - "8025:8025"
+    networks:
+      - web
+  # Selenium container: https://hub.docker.com/r/selenium/standalone-chrome-debug
+  selenium:
+    image: selenium/standalone-chrome-debug:3.14.0
+    container_name: selenium
+    restart: always
+    shm_size: 2g
+    ports:
+      - "5900:5900"
+      - "4444:4444"
+    networks:
+      - web
+    depends_on:
+      - apache
+    extra_hosts:
+      - magento.local:172.17.0.1
+networks:
+  web:
+    driver: bridge
+  database:
+    driver: bridge
+volumes:
+  db-data:
+    external: false
